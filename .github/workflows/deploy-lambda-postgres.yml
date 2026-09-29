@@ -11,6 +11,11 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Se expone el secret como env porque el contexto `secrets`
+    # no está permitido dentro de un `if:` (da "Unrecognized named-value").
+    # Si el secret no existe, queda como string vacío y el paso se salta.
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     defaults:
       run:
         working-directory: lambda-postgres
@@ -56,7 +61,7 @@ jobs:
       # esto lo deja como variable de entorno en la Lambda.
       # Si no usas DATABASE_URL, borra este paso.
       - name: Update Lambda env (DATABASE_URL)
-        if: ${{ secrets.DATABASE_URL != '' }}
+        if: ${{ env.DATABASE_URL != '' }}
         run: |
           aws lambda update-function-configuration \
             --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
