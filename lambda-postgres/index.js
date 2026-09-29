@@ -9,10 +9,11 @@ const pool = new Pool({
 
 exports.handler = async (event) => {
   const records = event.Records ?? [];
-  let client;
-  try {
-    client = await pool.connect();
-    for (const record of records) {
+    let client;
+    try {
+        client = await pool.connect();
+        const inserted = [];
+        for (const record of records) {
       const body = JSON.parse(record.body);
       console.log("Procesando producto de SQS:", body);
 
@@ -28,11 +29,12 @@ exports.handler = async (event) => {
         "Producto insertado en PostgreSQL exitosamente:",
         res.rows[0],
       );
+      inserted.push(res.rows[0]);
     }
 
     return {
       statusCode: 200,
-      body: JSON.stringify("Productos procesados e insertados correctamente."),
+      body: JSON.stringify(inserted),
     };
   } catch (error) {
     console.error("Error al insertar en PostgreSQL:", error);
