@@ -1,0 +1,16 @@
+{
+  "name": "lambda-products-catalog",
+  "version": "1.0.0",
+  "description": "Recibe un product y lo publica al SNS transporte con {type, body}",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --check index.js && echo OK"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-sns": "^3.600.0"
+  }
+}
