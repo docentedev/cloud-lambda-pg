@@ -1,0 +1,62 @@
+name: Deploy lambda-products-catalog to AWS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lambda-products-catalog/**'
+      - '.github/workflows/deploy-lambda-products-catalog.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Se exponen como env porque `secrets` no está permitido dentro de un `if:`.
+    env:
+      SNS_TOPIC_ARN: ${{ secrets.SNS_TOPIC_ARN }}
+    defaults:
+      run:
+        working-directory: lambda-products-catalog
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: lambda-products-catalog/package-lock.json
+
+      - name: Install deps (prod only)
+        run: npm ci --omit=dev
+
+      - name: Build zip
+        run: |
+          zip -r ../catalog-function.zip . -x "*.git*" "*.DS_Store*"
+          ls -lh ../catalog-function.zip
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name "${{ secrets.LAMBDA_CATALOG_FUNCTION_NAME }}" \
+            --zip-file "fileb://../catalog-function.zip"
+
+          aws lambda wait function-updated \
+            --function-name "${{ secrets.LAMBDA_CATALOG_FUNCTION_NAME }}"
+
+      # Deja el ARN del SNS como env var en la Lambda (solo si existe el secret).
+      - name: Update Lambda env (SNS_TOPIC_ARN)
+        if: ${{ env.SNS_TOPIC_ARN != '' }}
+        run: |
+          aws lambda update-function-configuration \
+            --function-name "${{ secrets.LAMBDA_CATALOG_FUNCTION_NAME }}" \
+            --environment "Variables={SNS_TOPIC_ARN=${{ secrets.SNS_TOPIC_ARN }},AWS_REGION=${{ secrets.AWS_REGION }}}"
