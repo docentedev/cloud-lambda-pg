@@ -54,9 +54,10 @@ jobs:
             --function-name "${{ secrets.LAMBDA_CATALOG_FUNCTION_NAME }}"
 
       # Deja el ARN del SNS como env var en la Lambda (solo si existe el secret).
+      # Nota: AWS_REGION es reservada por Lambda, no se configura manual.
       - name: Update Lambda env (SNS_TOPIC_ARN)
         if: ${{ env.SNS_TOPIC_ARN != '' }}
         run: |
           aws lambda update-function-configuration \
             --function-name "${{ secrets.LAMBDA_CATALOG_FUNCTION_NAME }}" \
-            --environment "Variables={SNS_TOPIC_ARN=${{ secrets.SNS_TOPIC_ARN }},AWS_REGION=${{ secrets.AWS_REGION }}}"
+            --environment "Variables={SNS_TOPIC_ARN=${{ secrets.SNS_TOPIC_ARN }}}"

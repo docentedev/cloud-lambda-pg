@@ -202,7 +202,14 @@ Soporta SNS-envelope + `{type,body}`, SQS directo `{type,body}`, y producto plan
 
 ## Paso 6. Desplegar por GitHub Actions
 
-Push a `main` que toque `lambda-postgres/**` → `npm ci` → `function.zip` → `update-function-code` en `miReceptor`.
+Cada lambda se despliega **solo si cambia su propio directorio** (filtros `paths:`):
+
+| Workflow | Se dispara si cambia | Actualiza |
+|---|---|---|
+| `deploy-lambda-postgres.yml` | `lambda-postgres/**` | `miReceptor` (`LAMBDA_FUNCTION_NAME`) |
+| `deploy-lambda-products-catalog.yml` | `lambda-products-catalog/**` | `productsCatalog` (`LAMBDA_CATALOG_FUNCTION_NAME`) |
+
+Cambios en `docs/` no despliegan nada.
 
 ```bash
 git status
@@ -214,7 +221,55 @@ gh run watch
 aws lambda get-function --function-name miReceptor --region $REGION --query 'Configuration.[LastModified,CodeSize]'
 ```
 
-Secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION=us-east-2`, `LAMBDA_FUNCTION_NAME=miReceptor`, más `DATABASE_URL` en la Lambda. Detalle en `DEPLOY.md`.
+Secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION=us-east-2`, `LAMBDA_FUNCTION_NAME=miReceptor`, `LAMBDA_CATALOG_FUNCTION_NAME=productsCatalog`, `SNS_TOPIC_ARN=arn:...:transporte` (opcional, lo deja como env en catalog), más `DATABASE_URL` en la Lambda. Detalle en `DEPLOY.md`.
+
+## Paso 7. Lambda publicadora `productsCatalog` (creada 2026-09-30)
+
+> El workflow **no crea** la función, solo la actualiza. Se creó una vez a mano y quedó documentado aquí.
+
+Código en `lambda-products-catalog/index.js`: recibe `{id,name,price,stock}` (directo o vía API-GW `{body:"{...}"}`), valida tipos y publica `{"type":"products","body":{...}}` al SNS (SDK v3 `SNSClient/PublishCommand`).
+
+Creación (una sola vez, ya ejecutada):
+
+```bash
+cd lambda-products-catalog
+npm ci --omit=dev
+zip -r ../catalog-function.zip . -x "*.git*" "*.DS_Store*"
+
+aws lambda create-function \
+  --function-name productsCatalog \
+  --runtime nodejs20.x \
+  --role arn:aws:iam::258344940817:role/service-role/miReceptor-role-3i4xgr9j \
+  --handler index.handler \
+  --zip-file fileb://../catalog-function.zip \
+  --timeout 10 --memory-size 128 \
+  --environment "Variables={SNS_TOPIC_ARN=arn:aws:sns:us-east-2:258344940817:transporte}" \
+  --region us-east-2
+# Nota: AWS_REGION es reservada, Lambda la inyecta sola, no se pone en --environment.
+
+aws iam put-role-policy --role-name miReceptor-role-3i4xgr9j \
+  --policy-name sns-publish-transporte \
+  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["sns:Publish"],"Resource":"arn:aws:sns:us-east-2:258344940817:transporte"}]}'
+```
+
+Verificación (ya ejecutada, `id:996`):
+
+```bash
+printf '%s' '{"id":996,"name":"Teclado mecanico","price":49990,"stock":10}' > /tmp/payload.json
+aws lambda invoke --function-name productsCatalog --region us-east-2 \
+  --cli-binary-format raw-in-base64-out --payload file:///tmp/payload.json /tmp/catalog-out.json && cat /tmp/catalog-out.json
+# -> {"statusCode":200,"body":"{\"messageId\":\"67c8cae0-...\",\"topic\":\"...transporte\",...}"}
+aws logs tail /aws/lambda/productsCatalog --since 5m --region us-east-2
+# -> Publicado en SNS: 67c8cae0-... {"type":"products","body":{"id":996,...}}
+```
+
+Probarla en clase (ojo: `--payload` con ñ/acentos falla, usa ASCII):
+
+```bash
+printf '%s' '{"id":993,"name":"Mouse inalambrico","price":19990,"stock":25}' > /tmp/payload.json
+aws lambda invoke --function-name productsCatalog --region us-east-2 \
+  --cli-binary-format raw-in-base64-out --payload file:///tmp/payload.json /tmp/out.json && cat /tmp/out.json
+```
 
 ## Paso 7. Checklist si algo no llega
 
