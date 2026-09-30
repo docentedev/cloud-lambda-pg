@@ -271,7 +271,7 @@ aws lambda invoke --function-name productsCatalog --region us-east-2 \
   --cli-binary-format raw-in-base64-out --payload file:///tmp/payload.json /tmp/out.json && cat /tmp/out.json
 ```
 
-## Paso 7. Checklist si algo no llega
+## Paso 8. Checklist si algo no llega
 
 1. ¿`--region us-east-2`? El 90% de los “no existe” es eso.
 2. ¿`FilterPolicyScope=MessageBody` y mensaje JSON válido con `"type":"products"`?
@@ -279,6 +279,46 @@ aws lambda invoke --function-name productsCatalog --region us-east-2 \
 4. ¿Cola en 0 pero `NotVisible>0`? Lambda lo tomó, mira logs, no hagas peek a ciegas.
 5. ¿Log dice `Type: Notification` + `null id`? Falta el unwrap del paso 5, despliega de nuevo.
 6. ¿Peek vacío con trigger activo? Normal, pausa el trigger (4b) para la demo.
+
+## Paso 9. API Gateway `ANY /productos` → `productsCatalog` (probado 2026-09-30)
+
+Integración verificada en `mi-pasarela-api` (`yxpnxitdnh`, HTTP API, `$default`):
+
+```bash
+aws apigatewayv2 get-routes --api-id yxpnxitdnh --region us-east-2
+# ANY /productos -> integrations/3kv33yd, Auth NONE
+aws apigatewayv2 get-integrations --api-id yxpnxitdnh --region us-east-2
+# 3kv33yd: AWS_PROXY POST -> arn:...:function:productsCatalog, Payload 2.0
+```
+
+`curl` de laboratorio (usa ASCII, evita `ñ`):
+
+```bash
+curl -X POST "https://yxpnxitdnh.execute-api.us-east-2.amazonaws.com/productos" \
+  -H "Content-Type: application/json" \
+  -d '{"id":994,"name":"Mouse inalambrico","price":19990,"stock":25}'
+```
+
+Prueba ejecutada con `id:994`:
+
+```json
+{"messageId":"b1b1b916-c04e-5838-9688-da202b4e74b2","topic":"arn:aws:sns:us-east-2:258344940817:transporte","sent":{"type":"products","body":{"id":994,"name":"Mouse inalambrico","price":19990,"stock":25}}}
+HTTP:200
+```
+
+Traza verificada:
+
+```bash
+aws logs tail /aws/lambda/productsCatalog --since 3m --region us-east-2 | grep 994
+# Publicado en SNS: b1b1b916-... {"type":"products","body":{"id":994,...}}
+
+aws logs tail /aws/lambda/miReceptor --since 3m --region us-east-2 | grep 994
+# Procesando producto de SQS: { id: 994, name: 'Mouse inalambrico', ... }
+# Producto insertado en PostgreSQL exitosamente: { id: '994', ... }
+```
+
+Flujo completo OK: `curl → API → productsCatalog → SNS(transporte/filtro products) → SQS(miCola) → miReceptor → Postgres`.
+Si repites con el mismo `id`, fallará por PK duplicada: usa un `id` nuevo por prueba.
 
 ---
 
