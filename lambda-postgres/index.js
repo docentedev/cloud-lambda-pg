@@ -14,7 +14,16 @@ exports.handler = async (event) => {
         client = await pool.connect();
         const inserted = [];
         for (const record of records) {
-      const body = JSON.parse(record.body);
+      // 1. record.body puede ser:
+      //  a) Envoltura SNS (RawMessageDelivery=false): {"Type":"Notification","Message":"{...}",...}
+      //  b) Mensaje directo SQS: {"id":...} o {"type":"products","body":{...}}
+      const envelope = JSON.parse(record.body);
+      const msgStr = envelope.Message ?? record.body;
+      const payload =
+        typeof msgStr === "string" ? JSON.parse(msgStr) : msgStr;
+
+      // 2. payload puede ser {type:"products", body:{id,...}} o directo {id,...}
+      const body = payload.body ?? payload;
       console.log("Procesando producto de SQS:", body);
 
       const queryText = `
