@@ -4,13 +4,14 @@
   "description": "Recibe un product y lo publica al SNS transporte con {type, body}",
   "main": "index.js",
   "scripts": {
-    "test": "node --check index.js && echo OK"
+    "test": "node --check index.js && node --check src/handler.js && node --check src/service.js && node --check src/db.js && node --check src/product.repository.js && node --check src/sns.repository.js && echo OK"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@aws-sdk/client-sns": "^3.600.0"
+    "@aws-sdk/client-sns": "^3.600.0",
+    "pg": "^8.23.0"
   }
 }

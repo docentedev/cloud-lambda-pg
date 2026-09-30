@@ -216,9 +216,20 @@ const values = [body.id, body.name, body.price, body.stock];
 
 Sin este paso, `body.id` es `undefined` y PostgreSQL retorna `23502 null value in column "id"`, con reintento del lote.
 
-### 5.2 Publisher (`lambda-products-catalog/index.js`)
+### 5.2 Publisher (`lambda-products-catalog/`, capas)
 
-Dependencia: `@aws-sdk/client-sns` (`SNSClient`, `PublishCommand`). Acepta evento directo `{id,...}`, evento API Gateway v2 `{body:"..."}` y pre-envuelto `{type,body}`; valida tipos (`400` si inválido); publica `{"type":"products","body":{...}}` en `SNS_TOPIC_ARN`. Región de firma: `process.env.AWS_REGION` (inyectada por Lambda) con fallback `us-east-2`.
+Estructura (entry `index.js` → `src/`; handler Lambda sigue siendo `index.handler`):
+
+| Capa | Archivo | Responsabilidad |
+|---|---|---|
+| Controller | `src/handler.js` | Traduce evento (directo / API GW v2 `{body}` / pre-envuelto `{type,body}`) ⇄ respuesta HTTP. Sin SNS/SQL. |
+| Negocio | `src/service.js` | `validateProduct` + chequeo duplicado + construcción de `{"type":"products","body"}`. |
+| Repository SNS | `src/sns.repository.js` | Único que usa `SNSClient/PublishCommand`. |
+| Repository DB | `src/product.repository.js` + `src/db.js` | Únicas con SQL (`existsById`, `findById`, pool `pg`). Si no hay `DATABASE_URL`, el chequeo se omite sin bloquear. |
+
+Flujo: `handler.extractInput → service.publishProduct → (validate → productRepo.existsById → 409 si existe → snsRepo.publishProductMessage) → 200 {messageId, topic, sent}`. Errores de validación → `400`; duplicado → `409`.
+
+Verificado: `node --check` de los 6 archivos OK; `handler({id:'x'})` → `400`; `handler({id:998,...})` → `200` con `MessageId 92e22af9-...` publicado al SNS.
 
 ## 6. Integración API Gateway
 
@@ -337,7 +348,7 @@ Alternativa quirúrgica (borrar mensajes puntuales sin vaciar la cola): `receive
 ## 10. Referencia de archivos
 
 - `lambda-postgres/index.js`: consumer SQS → PostgreSQL.
-- `lambda-products-catalog/index.js`, `package.json`: publisher API/Lambda → SNS.
+- `lambda-products-catalog/index.js` (entry), `src/handler.js` (controller), `src/service.js` (negocio), `src/sns.repository.js` (SNS), `src/product.repository.js` + `src/db.js` (DB), `package.json` (`@aws-sdk/client-sns`, `pg`).
 - `.github/workflows/deploy-lambda-postgres.yml`, `deploy-lambda-products-catalog.yml`: CI por directorio.
 - `DEPLOY.md`: detalle de secrets, variables y contrato SQS original.
 - `docs/README.md`, `docs/busqueda-sns-sqs.md`, `docs/sesion-sns-sqs-lambda-para-estudiantes.md`: material previo consolidado en el presente documento, que es la referencia canónica.
