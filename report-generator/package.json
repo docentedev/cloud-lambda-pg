@@ -1,13 +1,16 @@
 {
   "name": "report-generator",
   "version": "1.0.0",
-  "description": "Genera informes: consume solicitudes {type:'report.requested', body} desde SQS report-generation (suscrita al SNS report-events)",
+  "description": "Genera informes: consume solicitudes {type:'report.requested', body} desde SQS, arma un aviso con los 10 productos más caros y lo publica en la API de notificaciones",
   "main": "index.js",
   "scripts": {
-    "test": "node --check index.js && node --check src/handler.js && node --check src/report.service.js && node --check src/notifier.js && echo OK"
+    "test": "node --check index.js && node --check src/handler.js && node --check src/report.service.js && node --check src/notifier.js && node --check src/product.repository.js && echo OK"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "pg": "^8.23.1"
+  }
 }

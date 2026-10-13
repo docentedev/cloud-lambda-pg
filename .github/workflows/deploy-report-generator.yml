@@ -11,6 +11,12 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Se exponen como env porque `secrets` no está permitido dentro de un `if:`.
+    # GitHub enmascara sus valores en los logs.
+    env:
+      API_NOTIFICATION: ${{ secrets.API_NOTIFICATION }}
+      API_TOKEN_INTEGRATION: ${{ secrets.API_TOKEN_INTEGRATION }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     defaults:
       run:
         working-directory: report-generator
@@ -49,3 +55,19 @@ jobs:
 
           aws lambda wait function-updated \
             --function-name "${{ secrets.LAMBDA_GENERATOR_FUNCTION_NAME }}"
+
+      # Los secrets de GitHub solo existen en el workflow: la Lambda los necesita como variables de entorno.
+      # OJO: update-function-configuration reemplaza TODAS las variables, por eso se envían las tres juntas.
+      - name: Update Lambda env (API de avisos y base de datos)
+        if: ${{ env.API_NOTIFICATION != '' && env.API_TOKEN_INTEGRATION != '' && env.DATABASE_URL != '' }}
+        run: |
+          jq -n --arg api "$API_NOTIFICATION" --arg token "$API_TOKEN_INTEGRATION" --arg db "$DATABASE_URL" \
+            '{Variables: {API_NOTIFICATION: $api, API_TOKEN_INTEGRATION: $token, DATABASE_URL: $db}}' > "$RUNNER_TEMP/env.json"
+          aws lambda update-function-configuration \
+            --function-name "${{ secrets.LAMBDA_GENERATOR_FUNCTION_NAME }}" \
+            --environment "file://$RUNNER_TEMP/env.json" > /dev/null
+          rm -f "$RUNNER_TEMP/env.json"
+
+      - name: Aviso si faltan secrets
+        if: ${{ env.API_NOTIFICATION == '' || env.API_TOKEN_INTEGRATION == '' || env.DATABASE_URL == '' }}
+        run: echo "::warning::Faltan secrets (API_NOTIFICATION, API_TOKEN_INTEGRATION y/o DATABASE_URL). La Lambda se desplegó, pero conserva las variables de entorno anteriores."
