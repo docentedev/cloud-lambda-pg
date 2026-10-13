@@ -31,7 +31,7 @@ function describeFailure(res, contentType, body) {
 
 async function sendReport(report) {
   if (process.env.NOTIFY_MODE === "log") {
-    console.log(`[NOTIFY_MODE=log] Aviso para ${report.requester}:\n${report.text}`);
+    console.log(`[NOTIFY_MODE=log] Aviso del informe ${report.reportId} para ${report.requester}:\n${report.text}`);
     return { delivered: false };
   }
 
