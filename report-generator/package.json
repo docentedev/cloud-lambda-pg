@@ -1,0 +1,13 @@
+{
+  "name": "report-generator",
+  "version": "1.0.0",
+  "description": "Genera informes: consume solicitudes {type:'report.requested', body} desde SQS report-generation (suscrita al SNS report-events)",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --check index.js && node --check src/handler.js && node --check src/report.service.js && node --check src/notifier.js && echo OK"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

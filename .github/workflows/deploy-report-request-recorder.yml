@@ -1,11 +1,11 @@
-name: Deploy lambda-postgres to AWS
+name: Deploy report-request-recorder to AWS
 
 on:
   push:
     branches: [main]
     paths:
-      - 'lambda-postgres/**'
-      - '.github/workflows/deploy-lambda-postgres.yml'
+      - 'report-request-recorder/**'
+      - '.github/workflows/deploy-report-request-recorder.yml'
   workflow_dispatch:
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     defaults:
       run:
-        working-directory: lambda-postgres
+        working-directory: report-request-recorder
 
     steps:
       - name: Checkout
@@ -29,15 +29,15 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: lambda-postgres/package-lock.json
+          cache-dependency-path: report-request-recorder/package-lock.json
 
       - name: Install deps (prod only)
         run: npm ci --omit=dev
 
       - name: Build zip (lo que hoy haces a mano)
         run: |
-          zip -r ../function.zip . -x "*.git*" "*.DS_Store*"
-          ls -lh ../function.zip
+          zip -r ../recorder-function.zip . -x "*.git*" "*.DS_Store*"
+          ls -lh ../recorder-function.zip
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -49,13 +49,13 @@ jobs:
       - name: Deploy to Lambda
         run: |
           aws lambda update-function-code \
-            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
-            --zip-file "fileb://../function.zip"
+            --function-name "${{ secrets.LAMBDA_RECORDER_FUNCTION_NAME }}" \
+            --zip-file "fileb://../recorder-function.zip"
 
           # Espera a que termine la actualización de código
           # antes de tocar la configuración (si no, falla con "busy")
           aws lambda wait function-updated \
-            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}"
+            --function-name "${{ secrets.LAMBDA_RECORDER_FUNCTION_NAME }}"
 
       # Opcional: si guardas el connection string como secret,
       # esto lo deja como variable de entorno en la Lambda.
@@ -64,5 +64,5 @@ jobs:
         if: ${{ env.DATABASE_URL != '' }}
         run: |
           aws lambda update-function-configuration \
-            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
+            --function-name "${{ secrets.LAMBDA_RECORDER_FUNCTION_NAME }}" \
             --environment "Variables={DATABASE_URL=${{ secrets.DATABASE_URL }}}"
